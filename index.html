@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReguFlow MVP - 醫藥法規自動化檢索系統</title>
+    <meta
+      name="description"
+      content="ReguFlow MVP: role-aware Taiwan pharma regulatory retrieval with grounded laws, checklist, and process cards."
+    />
+    <link rel="stylesheet" href="/styles.css?v=20260810v2" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <aside class="sidebar" aria-label="ReguFlow pipeline">
+          <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-expanded="true" aria-label="收合左側欄">‹</button>
+          <div class="brand-block">
+            <div class="brand-mark">R</div>
+            <div>
+              <p class="eyebrow">ReguFlow MVP V2</p>
+              <h1>醫藥法規自動化檢索系統</h1>
+            </div>
+          </div>
+
+          <div class="pipeline-card">
+            <p class="section-label">法規檢索流程</p>
+            <ol class="pipeline-list">
+              <li class="active" data-step="1">抽取法律事實</li>
+              <li data-step="2">混合檢索候選法規</li>
+              <li data-step="3">判斷適用性與缺漏事實</li>
+              <li data-step="4">產出可追溯報告</li>
+              <li data-step="5">產出重點與代辦清單</li>
+              <li data-step="6">產出流程圖卡片</li>
+            </ol>
+          </div>
+
+          <div class="source-card">
+            <p class="section-label">系統狀態</p>
+            <div class="sidebar-status" id="sidebarStatus">檢查中...</div>
+          </div>
+
+          <div class="source-card">
+            <p class="section-label">使用指引</p>
+            <p>
+              本系統即時串接法務部全國法規資料庫，確保資訊零幻覺。輸入情境後系統自動完成法規路徑、白話重點與合規流程圖。
+            </p>
+          </div>
+        </aside>
+
+        <section class="main-panel">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">法規智慧助理</p>
+              <h2>輸入情境，一鍵產出完整法規路徑與合規流程圖</h2>
+            </div>
+            <button class="ghost-button" id="loadDemo" type="button">載入示範案例</button>
+          </header>
+
+          <div class="mode-tabs" role="tablist">
+            <button class="mode-tab active" id="tabRetrieval" type="button" role="tab">法規檢索</button>
+            <button class="mode-tab" id="tabCompliance" type="button" role="tab">合規檢查</button>
+          </div>
+
+          <div id="modeCompliance" class="hidden">
+            <section class="input-section">
+              <div class="section-header">
+                <div>
+                  <p class="section-label">合規檢查</p>
+                  <h3>廣告與衛教文案合規檢查</h3>
+                </div>
+                <span class="status-pill api-off">送審前自我檢查</span>
+              </div>
+
+              <div class="api-status">
+                🔒 檔案在您的瀏覽器內解析，<strong>原始檔案不會上傳</strong>，僅抽取出的文字會送出分析；伺服器不儲存任何內容。文字會送至 OpenAI API 進行判讀。
+              </div>
+
+              <label class="input-label" for="adContent">貼上文案內容，或上傳 .txt / .docx 檔：</label>
+              <textarea
+                id="adContent"
+                rows="8"
+                placeholder="例如：本產品經臨床實驗證實，三週有效改善關節疼痛，多位醫師推薦..."
+              ></textarea>
+
+              <div class="upload-row">
+                <input type="file" id="adFile" accept=".txt,.md,.docx" />
+                <span class="hint-text" id="fileStatus"></span>
+              </div>
+
+              <div class="form-grid">
+                <label>
+                  產品類型
+                  <select id="ccProductType">
+                    <option value="prescription_drug">處方藥</option>
+                    <option value="otc_drug">指示藥</option>
+                    <option value="general_drug">成藥</option>
+                    <option value="cell_therapy">細胞製劑 / 再生醫療製劑</option>
+                  </select>
+                </label>
+                <label>
+                  投放通路
+                  <select id="ccChannel">
+                    <option value="mass_media">大眾媒體（電視、報章雜誌）</option>
+                    <option value="social_media">社群媒體／網紅內容</option>
+                    <option value="website">公司網站／消費者可見網頁</option>
+                    <option value="outdoor">戶外廣告</option>
+                    <option value="academic_journal">學術性醫療刊物</option>
+                    <option value="professional">醫療專業人員場合</option>
+                  </select>
+                </label>
+                <label>
+                  已取得藥品許可證
+                  <select id="ccHasLicense">
+                    <option value="true">是</option>
+                    <option value="false">否</option>
+                  </select>
+                </label>
+                <label>
+                  刊登者為藥商
+                  <select id="ccIsDrugSeller">
+                    <option value="true">是</option>
+                    <option value="false">否</option>
+                  </select>
+                </label>
+                <label>
+                  廣告已取得核准
+                  <select id="ccAdApproved">
+                    <option value="false">否／尚未送審</option>
+                    <option value="true">是</option>
+                  </select>
+                </label>
+              </div>
+
+              <button class="primary-button" id="runCheck" type="button">開始合規檢查</button>
+            </section>
+
+            <section class="progress-section hidden" id="ccProgress" aria-live="polite">
+              <div class="spinner-row">
+                <span class="spinner" aria-hidden="true"></span>
+                <p>正在比對藥事法第七章條文，請稍候...</p>
+              </div>
+            </section>
+
+            <section class="results-grid hidden" id="ccResults">
+              <article class="report-card wide-card">
+                <div class="section-header">
+                  <div>
+                    <p class="section-label">Structural Rules</p>
+                    <h3>條件性檢查（依填寫條件判定）</h3>
+                  </div>
+                  <span class="score-badge" id="ccStructuralCount">--</span>
+                </div>
+                <div id="ccStructural" class="answers-list"></div>
+              </article>
+
+              <article class="report-card wide-card">
+                <div class="section-header">
+                  <div>
+                    <p class="section-label">Text Screening</p>
+                    <h3>文字內容檢查</h3>
+                  </div>
+                  <span class="score-badge" id="ccTextCount">--</span>
+                </div>
+                <div id="ccText" class="answers-list"></div>
+                <p class="hint-text">
+                  本檢查為送審前自我檢視，<strong>不等同於藥事法第66條之主管機關核准</strong>；刊播前仍須依法送審，結果請由法務或法規事務人員複核。
+                </p>
+              </article>
+            </section>
+          </div>
+
+          <div id="modeRetrieval">
+          <section class="input-section" aria-labelledby="input-title">
+            <div class="section-header">
+              <div>
+                <p class="section-label">Request</p>
+                <h3 id="input-title">情境與條件輸入</h3>
+              </div>
+              <span class="status-pill" id="modeBadge">Checking API...</span>
+            </div>
+
+            <div class="api-status" id="apiStatus">正在檢查後端與 AI API 狀態。</div>
+
+            <label class="input-label" for="scenario">
+              請描述您的角色定位、醫藥品引入情境與需求：
+            </label>
+            <textarea
+              id="scenario"
+              rows="5"
+              placeholder="例如：我是代理商 BD，要引入細胞製劑，請告訴我相關的查驗與物流規範..."
+            ></textarea>
+
+            <div class="form-grid">
+              <label>
+                目標市場
+                <select id="market">
+                  <option value="台灣">台灣</option>
+                </select>
+              </label>
+              <label>
+                產品類型
+                <select id="productType">
+                  <option value="auto">自動判斷</option>
+                  <option value="prescription_drug">處方藥</option>
+                  <option value="otc_drug">指示藥</option>
+                  <option value="general_drug">成藥</option>
+                  <option value="cell_therapy">細胞製劑 / 再生醫療製劑</option>
+                </select>
+              </label>
+              <label>
+                角色定位
+                <select id="role">
+                  <option value="進口代理商">進口代理商</option>
+                  <option value="研發藥廠">研發藥廠</option>
+                  <option value="代工藥廠">代工藥廠</option>
+                  <option value="原料藥廠">原料藥廠</option>
+                  <option value="供應鏈物流">供應鏈 / 物流</option>
+                </select>
+              </label>
+              <label>
+                職能視角
+                <select id="jobFunction">
+                  <option value="">不指定</option>
+                  <option value="BD">BD 商務開發</option>
+                  <option value="PM">PM 產品經理</option>
+                  <option value="RA">RA 法規事務</option>
+                  <option value="QA">QA 品質保證</option>
+                </select>
+              </label>
+              <label>
+                競品查詢（選填）
+                <input
+                  id="nhiQuery"
+                  type="text"
+                  placeholder="主成分英文或 ATC 碼，如 PEMBROLIZUMAB"
+                />
+              </label>
+            </div>
+
+            <fieldset class="checkbox-group">
+              <legend>法規類型</legend>
+              <label><input type="checkbox" name="lawType" value="運輸 GDP" checked /> 運輸 GDP</label>
+              <label><input type="checkbox" name="lawType" value="生產 GMP" checked /> 生產 GMP</label>
+              <label><input type="checkbox" name="lawType" value="查驗登記" checked /> 查驗登記</label>
+              <label><input type="checkbox" name="lawType" value="供應來源與流向" /> 供應來源與流向</label>
+              <label><input type="checkbox" name="lawType" value="健保給付" /> 健保給付</label>
+              <label><input type="checkbox" name="lawType" value="廣告與衛教" /> 廣告與衛教</label>
+            </fieldset>
+
+            <button class="primary-button" id="analyze" type="button">
+              開始法規檢索與生成報告
+            </button>
+          </section>
+
+          <section class="progress-section hidden" id="progressSection" aria-live="polite">
+            <div class="spinner-row">
+              <span class="spinner" aria-hidden="true"></span>
+              <p id="progressText">正在連線法務部法規資料庫並進行 AI 分析，請稍候...</p>
+            </div>
+            <div class="progress-track"><span id="progressBar"></span></div>
+          </section>
+
+          <section class="results-grid hidden" id="results">
+            <article class="result-actions wide-card">
+              <div>
+                <strong>報告工具</strong>
+                <span id="saveStatus">結果尚未儲存</span>
+              </div>
+              <div class="result-action-buttons">
+                <button class="ghost-button small" id="saveReport" type="button">儲存結果</button>
+                <button class="ghost-button small" id="loadSavedReport" type="button">載入上次結果</button>
+                <button class="primary-button small" id="exportPdf" type="button">匯出 PDF</button>
+              </div>
+            </article>
+
+            <article class="report-card wide-card hidden" id="answersCard">
+              <div class="section-header">
+                <div>
+                  <p class="section-label">直接回答</p>
+                  <h3>針對您的提問</h3>
+                </div>
+              </div>
+              <div id="directAnswers" class="answers-list"></div>
+            </article>
+
+            <article class="report-card wide-card primary-report">
+              <div class="section-header">
+                <div>
+                  <p class="section-label">法規原文與依據</p>
+                  <h3>法條、適用性與角色專屬行動</h3>
+                </div>
+                <span class="score-badge" id="confidenceScore">--</span>
+              </div>
+              <div id="applicableLaws" class="law-report-list"></div>
+            </article>
+
+            <article class="report-card wide-card">
+              <div class="section-header">
+                <div>
+                  <p class="section-label">流程卡片</p>
+                  <h3>法規審查與供應鏈流程圖</h3>
+                </div>
+                <button class="ghost-button small" id="downloadFlowchart" type="button">下載流程圖 PNG</button>
+              </div>
+              <div id="processStages" class="stage-grid"></div>
+            </article>
+
+            <article class="report-card wide-card hidden" id="nhiCard">
+              <div class="section-header">
+                <div>
+                  <p class="section-label">健保開放資料</p>
+                  <h3>競品收載狀況（健保署開放資料）</h3>
+                </div>
+                <span class="score-badge" id="nhiMeta">--</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>藥品名稱</th>
+                      <th>成分</th>
+                      <th>劑型</th>
+                      <th>支付價</th>
+                      <th>藥商</th>
+                      <th>ATC</th>
+                    </tr>
+                  </thead>
+                  <tbody id="nhiRows"></tbody>
+                </table>
+              </div>
+              <p class="hint-text" id="nhiProvenance"></p>
+            </article>
+          </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/app.js?v=20260810v2"></script>
+  </body>
+</html>
